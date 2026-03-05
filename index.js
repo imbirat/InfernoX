@@ -31,7 +31,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 // ---------- DATA FILES ----------
 const LEVELS_FILE = './levels.json';
 const WARNINGS_FILE = './warnings.json';
-const XPCHANNELS_FILE = './xpChannels.json'; // Only used for level-up messages
+const XPCHANNELS_FILE = './xpChannels.json';
 
 let levels = fs.existsSync(LEVELS_FILE) ? JSON.parse(fs.readFileSync(LEVELS_FILE)) : {};
 let warnings = fs.existsSync(WARNINGS_FILE) ? JSON.parse(fs.readFileSync(WARNINGS_FILE)) : {};
@@ -95,7 +95,20 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
 })();
 
 // ---------- BOT EVENTS ----------
-client.once("ready", () => console.log(`✅ Logged in as ${client.user.tag}`));
+client.once("ready", () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+
+  // Set idle status with custom activity
+  client.user.setPresence({
+    status: 'idle',
+    activities: [
+      {
+        name: '/help | InfernoX',
+        type: 0 // Playing
+      }
+    ]
+  });
+});
 
 // ---------- WELCOME + AUTO-ROLE ----------
 client.on("guildMemberAdd", member => {
@@ -119,7 +132,7 @@ client.on("guildMemberAdd", member => {
 client.on("messageCreate", message => {
   if(message.author.bot) return;
 
-  // Give XP to everyone for all messages
+  // Give XP to all messages
   if(!levels[message.guild.id]) levels[message.guild.id] = {};
   if(!levels[message.guild.id][message.author.id]) levels[message.guild.id][message.author.id] = { xp: 0, level: 1 };
 
@@ -132,7 +145,7 @@ client.on("messageCreate", message => {
     userData.level++;
     userData.xp -= nextLevelXP;
 
-    // Send level-up in the channel set via /setxpchannel
+    // Send level-up in the set XP channel
     const lvlChannelId = xpChannels[message.guild.id]?.[0] || message.channel.id;
     const lvlChannel = message.guild.channels.cache.get(lvlChannelId);
     if(lvlChannel) lvlChannel.send(`🎉 Congrats ${message.author}! You reached level ${userData.level}!`);
@@ -148,7 +161,7 @@ client.on("interactionCreate", async interaction => {
 
   if(!levels[guild.id]) levels[guild.id] = {};
   if(!warnings[guild.id]) warnings[guild.id] = {};
-
+  
   const isAdminPerm = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
   // ---------- HELP ----------
