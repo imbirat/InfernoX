@@ -34,12 +34,14 @@ const WARNINGS_FILE = './warnings.json';
 const XPCHANNELS_FILE = './xpChannels.json';
 const AFK_FILE = './afk.json';
 const AUTOROLE_FILE = './autoroles.json';
+const WELCOME_FILE = './welcome.json';
 
 let levels = fs.existsSync(LEVELS_FILE) ? JSON.parse(fs.readFileSync(LEVELS_FILE)) : {};
 let warnings = fs.existsSync(WARNINGS_FILE) ? JSON.parse(fs.readFileSync(WARNINGS_FILE)) : {};
 let xpChannels = fs.existsSync(XPCHANNELS_FILE) ? JSON.parse(fs.readFileSync(XPCHANNELS_FILE)) : {};
 let afkData = fs.existsSync(AFK_FILE) ? JSON.parse(fs.readFileSync(AFK_FILE)) : {};
 let autoRoles = fs.existsSync(AUTOROLE_FILE) ? JSON.parse(fs.readFileSync(AUTOROLE_FILE)) : {};
+let welcomeChannels = fs.existsSync(WELCOME_FILE) ? JSON.parse(fs.readFileSync(WELCOME_FILE)) : {};
 
 function saveData(){
   fs.writeFileSync(LEVELS_FILE, JSON.stringify(levels, null, 2));
@@ -47,39 +49,18 @@ function saveData(){
   fs.writeFileSync(XPCHANNELS_FILE, JSON.stringify(xpChannels, null, 2));
   fs.writeFileSync(AFK_FILE, JSON.stringify(afkData, null, 2));
   fs.writeFileSync(AUTOROLE_FILE, JSON.stringify(autoRoles, null, 2));
+  fs.writeFileSync(WELCOME_FILE, JSON.stringify(welcomeChannels, null, 2));
 }
 
 // ---------- SLASH COMMANDS ----------
 const commands = [
   new SlashCommandBuilder().setName("help").setDescription("Shows all bot commands"),
-  new SlashCommandBuilder().setName("kick").setDescription("Kick a member")
-    .addUserOption(o => o.setName("user").setDescription("User to kick").setRequired(true)),
-  new SlashCommandBuilder().setName("ban").setDescription("Ban a member")
-    .addUserOption(o => o.setName("user").setDescription("User to ban").setRequired(true)),
-  new SlashCommandBuilder().setName("mute").setDescription("Mute a member temporarily")
-    .addUserOption(o => o.setName("user").setDescription("User to mute").setRequired(true))
-    .addIntegerOption(o => o.setName("minutes").setDescription("Duration in minutes").setRequired(true)),
-  new SlashCommandBuilder().setName("warn").setDescription("Warn a member")
-    .addUserOption(o => o.setName("user").setDescription("User to warn").setRequired(true))
-    .addStringOption(o => o.setName("reason").setDescription("Reason for warning").setRequired(true)),
-  new SlashCommandBuilder().setName("warnings").setDescription("Check warnings for a user")
-    .addUserOption(o => o.setName("user").setDescription("User to check").setRequired(true)),
-  new SlashCommandBuilder().setName("level").setDescription("Check your profile or level")
-    .addUserOption(o => o.setName("user").setDescription("Check someone else's profile")),
-  new SlashCommandBuilder().setName("addxp").setDescription("Add XP to a user")
-    .addUserOption(o => o.setName("user").setDescription("User to add XP").setRequired(true))
-    .addIntegerOption(o => o.setName("amount").setDescription("XP amount").setRequired(true)),
-  new SlashCommandBuilder().setName("removexp").setDescription("Remove XP from a user")
-    .addUserOption(o => o.setName("user").setDescription("User to remove XP").setRequired(true))
-    .addIntegerOption(o => o.setName("amount").setDescription("XP amount").setRequired(true)),
-  new SlashCommandBuilder().setName("leaderboard").setDescription("Shows top 10 users by level"),
-  new SlashCommandBuilder().setName("setxpchannel").setDescription("Set channel for level-up messages")
-    .addChannelOption(o => o.setName("channel").setDescription("Channel for level-up messages").setRequired(true)),
-  new SlashCommandBuilder().setName("ping").setDescription("Check bot latency"),
-  new SlashCommandBuilder().setName("afk").setDescription("Set yourself as AFK")
-    .addStringOption(o => o.setName("reason").setDescription("Reason for going AFK")),
+  new SlashCommandBuilder().setName("setwelcome").setDescription("Set welcome channel (admin only)")
+    .addChannelOption(o => o.setName("channel").setDescription("Channel for welcome messages").setRequired(true)),
   new SlashCommandBuilder().setName("setautorole").setDescription("Set role to auto-assign to new members")
-    .addRoleOption(o => o.setName("role").setDescription("Role to auto-assign").setRequired(true))
+    .addRoleOption(o => o.setName("role").setDescription("Role to auto-assign").setRequired(true)),
+  new SlashCommandBuilder().setName("setxpchannel").setDescription("Set channel for level-up messages")
+    .addChannelOption(o => o.setName("channel").setDescription("Channel for level-up messages").setRequired(true))
 ].map(cmd => cmd.toJSON());
 
 // ---------- REGISTER COMMANDS ----------
@@ -103,63 +84,28 @@ client.once("ready", () => {
 
 // ---------- WELCOME + AUTO-ROLE ----------
 client.on("guildMemberAdd", member => {
+  // Auto-role
   const roleId = autoRoles[member.guild.id];
   if(roleId){
     const role = member.guild.roles.cache.get(roleId);
     if(role) member.roles.add(role).catch(console.error);
   }
 
-  const channel = member.guild.channels.cache.find(c => c.name === "welcome");
-  if(channel){
-    const embed = new EmbedBuilder()
-      .setColor('#00ffcc')
-      .setTitle('🎉 Welcome!')
-      .setDescription(`Welcome ${member} to **${member.guild.name}**!\nEnjoy your stay!`)
-      .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: `Member #${member.guild.memberCount}` })
-      .setTimestamp();
-    channel.send({ embeds: [embed] });
-  }
-});
-
-// ---------- MESSAGE HANDLER ----------
-client.on("messageCreate", async message => {
-  if(message.author.bot) return;
-
-  // Remove AFK if user sends message
-  if(afkData[message.author.id]){
-    delete afkData[message.author.id];
-    saveData();
-    message.channel.send(`✅ Welcome back ${message.author.tag}, I removed your AFK status.`);
-  }
-
-  // Notify if mentioned user is AFK
-  message.mentions.users.forEach(async user => {
-    if(afkData[user.id]){
-      message.channel.send(`⚠️ ${user.tag} is currently AFK: ${afkData[user.id]}`);
-      try { await user.send(`💬 ${message.author.tag} mentioned you in **${message.guild.name}** while you were AFK.\nMessage: "${message.content}"`); } catch {}
+  // Welcome message
+  const channelId = welcomeChannels[member.guild.id];
+  if(channelId){
+    const channel = member.guild.channels.cache.get(channelId);
+    if(channel){
+      const embed = new EmbedBuilder()
+        .setColor('#00ffcc')
+        .setTitle('🎉 Welcome!')
+        .setDescription(`Welcome ${member} to **${member.guild.name}**!\nEnjoy your stay!`)
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: `Member #${member.guild.memberCount}` })
+        .setTimestamp();
+      channel.send({ embeds: [embed] });
     }
-  });
-
-  // XP & leveling
-  if(!levels[message.guild.id]) levels[message.guild.id] = {};
-  if(!levels[message.guild.id][message.author.id]) levels[message.guild.id][message.author.id] = { xp: 0, level: 1 };
-
-  const userData = levels[message.guild.id][message.author.id];
-  const xpGain = Math.floor(Math.random() * 10) + 5;
-  userData.xp += xpGain;
-
-  const nextLevelXP = userData.level * 100;
-  if(userData.xp >= nextLevelXP){
-    userData.level++;
-    userData.xp -= nextLevelXP;
-
-    const lvlChannelId = xpChannels[message.guild.id]?.[0] || message.channel.id;
-    const lvlChannel = message.guild.channels.cache.get(lvlChannelId);
-    if(lvlChannel) lvlChannel.send(`🎉 Congrats ${message.author}! You reached level ${userData.level}!`);
   }
-
-  saveData();
 });
 
 // ---------- INTERACTION HANDLER ----------
@@ -168,29 +114,18 @@ client.on("interactionCreate", async interaction => {
   const { commandName, guild, member } = interaction;
   const isAdminPerm = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  if(!levels[guild.id]) levels[guild.id] = {};
-  if(!warnings[guild.id]) warnings[guild.id] = {};
-
-  // HELP (shorter vertical)
-  if(commandName === "help"){
-    const embed = new EmbedBuilder()
-      .setTitle("🤖 Bot Commands")
-      .setColor("Blue")
-      .setDescription("Here are my main commands:")
-      .addFields(
-        { name: "Moderation", value: "`/kick @user`\n`/ban @user`\n`/mute @user <minutes>`\n`/warn @user <reason>`\n`/warnings @user`" },
-        { name: "Levels & XP", value: "`/level`\n`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/leaderboard`\n`/setxpchannel`" },
-        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`" }
-      )
-      .setFooter({ text: `Requested by ${interaction.user.tag}` })
-      .setTimestamp();
-    return interaction.reply({ embeds: [embed] });
-  }
-
-  // ---------- Admin commands ----------
-  const adminCommands = ["kick","ban","mute","warn","warnings","addxp","removexp","setxpchannel","setautorole"];
+  // Admin-only commands
+  const adminCommands = ["setautorole", "setxpchannel", "setwelcome"];
   if(adminCommands.includes(commandName) && !isAdminPerm)
     return interaction.reply({ content: "❌ Admin permission required.", ephemeral: true });
+
+  // ---------- SET WELCOME ----------
+  if(commandName === "setwelcome"){
+    const channel = interaction.options.getChannel("channel");
+    welcomeChannels[guild.id] = channel.id;
+    saveData();
+    return interaction.reply(`✅ Welcome messages will now appear in ${channel}.`);
+  }
 
   // ---------- SET AUTO-ROLE ----------
   if(commandName === "setautorole"){
@@ -200,8 +135,14 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`✅ Auto-role set to ${role.name}.`);
   }
 
-  // ---------- Other commands (kick, ban, mute, warn, level, leaderboard, ping, afk, setxpchannel) ----------
-  // ... same as previous full script for brevity
+  // ---------- SET XP CHANNEL ----------
+  if(commandName === "setxpchannel"){
+    const channel = interaction.options.getChannel("channel");
+    xpChannels[guild.id] = [channel.id];
+    saveData();
+    return interaction.reply(`✅ Level-up messages will now appear in ${channel}.`);
+  }
+
 });
 
 // ---------- LOGIN ----------
