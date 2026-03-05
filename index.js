@@ -73,6 +73,8 @@ const commands = [
     .addRoleOption(o => o.setName("role").setDescription("Role to auto-assign").setRequired(true)),
   new SlashCommandBuilder().setName("setwelcome").setDescription("Set welcome channel (admin only)")
     .addChannelOption(o => o.setName("channel").setDescription("Channel for welcome messages").setRequired(true)),
+  new SlashCommandBuilder().setName("announce").setDescription("Send an announcement (Admin only)")
+    .addStringOption(o => o.setName("message").setDescription("Message to announce").setRequired(true)),
 ].map(cmd => cmd.toJSON());
 
 // ---------- REGISTER COMMANDS ----------
@@ -96,14 +98,12 @@ client.once("ready", () => {
 
 // ---------- WELCOME + AUTO-ROLE ----------
 client.on("guildMemberAdd", member => {
-  // Auto-role
   const roleId = autoRoles[member.guild.id];
   if(roleId){
     const role = member.guild.roles.cache.get(roleId);
     if(role) member.roles.add(role).catch(console.error);
   }
 
-  // Welcome embed
   const channelId = welcomeChannels[member.guild.id];
   if(channelId){
     const channel = member.guild.channels.cache.get(channelId);
@@ -188,7 +188,7 @@ client.on("interactionCreate", async (interaction) => {
   const { commandName, guild, member } = interaction;
   const isAdminPerm = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  const adminCommands = ["setautorole","setxpchannel","setwelcome"];
+  const adminCommands = ["setautorole","setxpchannel","setwelcome","announce"];
   if(adminCommands.includes(commandName) && !isAdminPerm)
     return interaction.reply({ content:"❌ Admin permission required.", ephemeral:true });
 
@@ -197,9 +197,9 @@ client.on("interactionCreate", async (interaction) => {
     const embed = new EmbedBuilder()
       .setTitle("🤖 Bot Commands")
       .setColor("Blue")
-      .setDescription("Here are my main commands:")
+      .setDescription("Here are all commands:")
       .addFields(
-        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`\n`/setwelcome`" },
+        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`\n`/setwelcome`\n`/announce <message>`\n`?rules`" },
         { name: "Levels & XP", value: "`/level`\n`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/leaderboard`\n`/setxpchannel`" }
       )
       .setFooter({ text: `Requested by ${interaction.user.tag}` })
@@ -207,28 +207,37 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // ---------- SET WELCOME ----------
+  // ---------- ADMIN COMMANDS ----------
   if(commandName === "setwelcome"){
     const channel = interaction.options.getChannel("channel");
     welcomeChannels[guild.id] = channel.id;
     saveData();
     return interaction.reply(`✅ Welcome messages will now appear in ${channel}.`);
   }
-
-  // ---------- SET AUTO-ROLE ----------
   if(commandName === "setautorole"){
     const role = interaction.options.getRole("role");
     autoRoles[guild.id] = role.id;
     saveData();
     return interaction.reply(`✅ Auto-role set to ${role.name}.`);
   }
-
-  // ---------- SET XP CHANNEL ----------
   if(commandName === "setxpchannel"){
     const channel = interaction.options.getChannel("channel");
     xpChannels[guild.id] = [channel.id];
     saveData();
     return interaction.reply(`✅ Level-up messages will now appear in ${channel}.`);
+  }
+
+  // ---------- ANNOUNCE ----------
+  if(commandName === "announce"){
+    const announcement = interaction.options.getString("message");
+    const embed = new EmbedBuilder()
+      .setTitle("📢 Announcement")
+      .setDescription(announcement)
+      .setColor("Orange")
+      .setTimestamp()
+      .setFooter({ text: `Announced by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL({ dynamic:true }) });
+    interaction.channel.send({ embeds:[embed] });
+    interaction.reply({ content:"✅ Announcement sent!", ephemeral:true });
   }
 
   // ---------- PING ----------
@@ -248,7 +257,7 @@ client.on("interactionCreate", async (interaction) => {
   // ---------- LEVEL ----------
   if(commandName === "level"){
     const targetUser = interaction.options.getUser("user") || interaction.user;
-    if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp: 0, level: 1 };
+    if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp:0, level:1 };
     const data = levels[guild.id][targetUser.id];
     const embed = new EmbedBuilder()
       .setTitle(`${targetUser.tag}'s Profile`)
@@ -266,7 +275,7 @@ client.on("interactionCreate", async (interaction) => {
     if(commandName === "addxp") levels[guild.id][targetUser.id].xp += amount;
     else {
       levels[guild.id][targetUser.id].xp -= amount;
-      if(levels[guild.id][targetUser.id].xp < 0) levels[guild.id][targetUser.id].xp = 0;
+      if(levels[guild.id][targetUser.id].xp<0) levels[guild.id][targetUser.id].xp=0;
     }
     saveData();
     interaction.reply(`✅ ${commandName==="addxp"?"Added":"Removed"} ${amount} XP for ${targetUser.tag}.`);
@@ -277,7 +286,7 @@ client.on("interactionCreate", async (interaction) => {
     const guildLevels = levels[guild.id];
     if(!guildLevels || Object.keys(guildLevels).length===0) return interaction.reply("No level data yet.");
     const sorted = Object.entries(guildLevels)
-      .sort(([,a],[,b]) => b.level - a.level || b.xp - a.xp)
+      .sort(([,a],[,b])=> b.level - a.level || b.xp - a.xp)
       .slice(0,10);
     let desc = "";
     for(let i=0;i<sorted.length;i++){
