@@ -173,38 +173,28 @@ client.on("interactionCreate", async interaction => {
   if(!levels[guild.id]) levels[guild.id] = {};
   if(!warnings[guild.id]) warnings[guild.id] = {};
 
-  // HELP
+  // HELP (shorter vertical)
   if(commandName === "help"){
     const embed = new EmbedBuilder()
       .setTitle("🤖 Bot Commands")
       .setColor("Blue")
-      .setDescription("Available commands:")
+      .setDescription("Here are my main commands:")
       .addFields(
-        { name: "/kick @user", value: "Kick a member (Admin only)", inline: true },
-        { name: "/ban @user", value: "Ban a member (Admin only)", inline: true },
-        { name: "/mute @user <minutes>", value: "Mute member (Admin only)", inline: true },
-        { name: "/warn @user <reason>", value: "Warn a member (Admin only)", inline: true },
-        { name: "/warnings @user", value: "Check warnings (Admin only)", inline: true },
-        { name: "/level", value: "Check your level/profile", inline: true },
-        { name: "/addxp @user <amount>", value: "Add XP (Admin only)", inline: true },
-        { name: "/removexp @user <amount>", value: "Remove XP (Admin only)", inline: true },
-        { name: "/leaderboard", value: "Top 10 users by level", inline: true },
-        { name: "/setxpchannel", value: "Channel for level-ups (Admin only)", inline: true },
-        { name: "/setautorole", value: "Auto-assign role to new members", inline: true },
-        { name: "/ping", value: "Check bot latency", inline: true },
-        { name: "/afk <reason>", value: "Set yourself as AFK", inline: true }
+        { name: "Moderation", value: "`/kick @user`\n`/ban @user`\n`/mute @user <minutes>`\n`/warn @user <reason>`\n`/warnings @user`" },
+        { name: "Levels & XP", value: "`/level`\n`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/leaderboard`\n`/setxpchannel`" },
+        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`" }
       )
       .setFooter({ text: `Requested by ${interaction.user.tag}` })
       .setTimestamp();
     return interaction.reply({ embeds: [embed] });
   }
 
-  // Admin commands check
+  // ---------- Admin commands ----------
   const adminCommands = ["kick","ban","mute","warn","warnings","addxp","removexp","setxpchannel","setautorole"];
   if(adminCommands.includes(commandName) && !isAdminPerm)
     return interaction.reply({ content: "❌ Admin permission required.", ephemeral: true });
 
-  // KICK
+  // ---------- KICK ----------
   if(commandName === "kick"){
     const target = interaction.options.getUser("user");
     const memberTarget = guild.members.cache.get(target.id);
@@ -213,7 +203,7 @@ client.on("interactionCreate", async interaction => {
                         .catch(() => interaction.reply("Failed to kick."));
   }
 
-  // BAN
+  // ---------- BAN ----------
   if(commandName === "ban"){
     const target = interaction.options.getUser("user");
     const memberTarget = guild.members.cache.get(target.id);
@@ -222,7 +212,7 @@ client.on("interactionCreate", async interaction => {
                        .catch(() => interaction.reply("Failed to ban."));
   }
 
-  // MUTE
+  // ---------- MUTE ----------
   if(commandName === "mute"){
     const target = interaction.options.getUser("user");
     const minutes = interaction.options.getInteger("minutes");
@@ -231,7 +221,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`${target.tag} muted for ${minutes} minutes. (Set up Muted role manually)`);
   }
 
-  // WARN
+  // ---------- WARN ----------
   if(commandName === "warn"){
     const target = interaction.options.getUser("user");
     const reason = interaction.options.getString("reason");
@@ -241,14 +231,14 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`${target.tag} warned for: ${reason}`);
   }
 
-  // WARNINGS
+  // ---------- WARNINGS ----------
   if(commandName === "warnings"){
     const target = interaction.options.getUser("user");
     const userWarnings = warnings[guild.id][target.id] || [];
     return interaction.reply(`${target.tag} has ${userWarnings.length} warnings:\n${userWarnings.join("\n") || "No warnings."}`);
   }
 
-  // LEVEL
+  // ---------- LEVEL ----------
   if(commandName === "level"){
     const targetUser = interaction.options.getUser("user") || interaction.user;
     if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp: 0, level: 1 };
@@ -262,7 +252,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // ADD XP
+  // ---------- ADD XP ----------
   if(commandName === "addxp"){
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
@@ -272,7 +262,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`✅ Added ${amount} XP to ${targetUser.tag}.`);
   }
 
-  // REMOVE XP
+  // ---------- REMOVE XP ----------
   if(commandName === "removexp"){
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
@@ -283,7 +273,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`✅ Removed ${amount} XP from ${targetUser.tag}.`);
   }
 
-  // LEADERBOARD
+  // ---------- LEADERBOARD ----------
   if(commandName === "leaderboard"){
     const guildLevels = levels[guild.id];
     if(!guildLevels || Object.keys(guildLevels).length === 0) 
@@ -306,7 +296,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // SET XP CHANNEL
+  // ---------- SET XP CHANNEL ----------
   if(commandName === "setxpchannel"){
     const channel = interaction.options.getChannel("channel");
     xpChannels[guild.id] = [channel.id];
@@ -314,7 +304,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`✅ Level-up messages will now appear in ${channel}.`);
   }
 
-  // SET AUTO-ROLE
+  // ---------- SET AUTO-ROLE ----------
   if(commandName === "setautorole"){
     const role = interaction.options.getRole("role");
     autoRoles[guild.id] = role.id;
@@ -322,7 +312,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`✅ Auto-role set to ${role.name}.`);
   }
 
-  // PING
+  // ---------- PING ----------
   if(commandName === "ping"){
     const embed = new EmbedBuilder()
       .setTitle("🏓 Pong!")
@@ -335,7 +325,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // AFK
+  // ---------- AFK ----------
   if(commandName === "afk"){
     const reason = interaction.options.getString("reason") || "AFK";
     afkData[interaction.user.id] = reason;
