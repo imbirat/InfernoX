@@ -3,8 +3,7 @@ const {
   Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder
 } = require('discord.js');
 
-const { QuickDB } = require('quick.db'); // ✅ GitHub fork works on Railway
-const db = new QuickDB();
+const db = require('quick.db'); // ✅ classic quick.db for Railway
 
 const client = new Client({
   intents: [
@@ -26,8 +25,8 @@ const commands = [
   new SlashCommandBuilder()
     .setName("give")
     .setDescription("Give coins to another user")
-    .addUserOption(o => o.setName("user").setDescription("The user you want to give coins to").setRequired(true))
-    .addIntegerOption(o => o.setName("amount").setDescription("Amount of coins to give").setRequired(true)),
+    .addUserOption(o => o.setName("user").setDescription("User to give coins to").setRequired(true))
+    .addIntegerOption(o => o.setName("amount").setDescription("Amount of coins").setRequired(true)),
   new SlashCommandBuilder()
     .setName("rob")
     .setDescription("Rob coins from another user")
@@ -35,33 +34,33 @@ const commands = [
   new SlashCommandBuilder()
     .setName("gamble")
     .setDescription("Gamble your coins")
-    .addIntegerOption(o => o.setName("amount").setDescription("Amount of coins to gamble").setRequired(true)),
+    .addIntegerOption(o => o.setName("amount").setDescription("Amount to gamble").setRequired(true)),
   new SlashCommandBuilder().setName("fish").setDescription("Go fishing to earn coins"),
   new SlashCommandBuilder().setName("profile").setDescription("Check your profile"),
   new SlashCommandBuilder()
     .setName("setwelcomechannel")
     .setDescription("Set the welcome channel")
-    .addChannelOption(o => o.setName("channel").setDescription("Select the welcome channel").setRequired(true)),
+    .addChannelOption(o => o.setName("channel").setDescription("Select welcome channel").setRequired(true)),
   new SlashCommandBuilder()
     .setName("setxpchannel")
-    .setDescription("Set the channel where XP level-up messages are sent")
-    .addChannelOption(o => o.setName("channel").setDescription("Select the XP channel").setRequired(true)),
+    .setDescription("Set the channel for level-up messages")
+    .addChannelOption(o => o.setName("channel").setDescription("Select XP channel").setRequired(true)),
   new SlashCommandBuilder()
     .setName("ban")
     .setDescription("Ban a user")
-    .addUserOption(o => o.setName("user").setDescription("The user to ban").setRequired(true)),
+    .addUserOption(o => o.setName("user").setDescription("User to ban").setRequired(true)),
   new SlashCommandBuilder()
     .setName("kick")
     .setDescription("Kick a user")
-    .addUserOption(o => o.setName("user").setDescription("The user to kick").setRequired(true)),
+    .addUserOption(o => o.setName("user").setDescription("User to kick").setRequired(true)),
   new SlashCommandBuilder()
     .setName("mute")
     .setDescription("Mute a user for 10 minutes")
-    .addUserOption(o => o.setName("user").setDescription("The user to mute").setRequired(true)),
+    .addUserOption(o => o.setName("user").setDescription("User to mute").setRequired(true)),
   new SlashCommandBuilder()
     .setName("unmute")
     .setDescription("Unmute a user")
-    .addUserOption(o => o.setName("user").setDescription("The user to unmute").setRequired(true)),
+    .addUserOption(o => o.setName("user").setDescription("User to unmute").setRequired(true)),
   new SlashCommandBuilder().setName("ping").setDescription("Check bot latency")
 ].map(cmd => cmd.toJSON());
 
@@ -84,7 +83,7 @@ client.on("ready", async () => {
 
 // ================= WELCOME SYSTEM =================
 client.on("guildMemberAdd", async member => {
-  const channelId = await db.get(`welcome_${member.guild.id}`);
+  const channelId = db.get(`welcome_${member.guild.id}`);
   if (!channelId) return;
   const channel = member.guild.channels.cache.get(channelId);
   if (!channel) return;
@@ -107,13 +106,13 @@ client.on("messageCreate", async message => {
   if (message.author.bot) return;
 
   // XP system
-  let xp = await db.get(`xp_${message.author.id}`) || 0;
+  let xp = db.get(`xp_${message.author.id}`) || 0;
   xp += 10;
   let level = Math.floor(0.1 * Math.sqrt(xp));
-  await db.set(`xp_${message.author.id}`, xp);
+  db.set(`xp_${message.author.id}`, xp);
 
   if (xp % 100 === 0) {
-    const xpChannelId = await db.get(`xpchannel_${message.guild.id}`);
+    const xpChannelId = db.get(`xpchannel_${message.guild.id}`);
     const xpChannel = message.guild.channels.cache.get(xpChannelId) || message.channel;
     xpChannel.send(`🎉 ${message.author} you have reached level ${level}`);
   }
@@ -122,6 +121,20 @@ client.on("messageCreate", async message => {
   if (!message.content.startsWith(PREFIX)) return;
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift().toLowerCase();
+
+  // -------- ?help --------
+  if (cmd === "help") {
+    const embed = new EmbedBuilder()
+      .setColor("Blue")
+      .setTitle("📘 Help Menu")
+      .setDescription(`
+💰 Economy: /daily /cash /give /rob /gamble /fish
+📊 Level: /profile
+🛠 Admin: /ban /kick /mute /unmute /setwelcomechannel /setxpchannel
+📜 Info: /rules /ping
+      `);
+    return message.reply({ embeds: [embed] });
+  }
 
   if (cmd === "ping") {
     message.reply(`🏓 Pong! Latency is ${Date.now() - message.createdTimestamp}ms`);
@@ -134,7 +147,7 @@ client.on("messageCreate", async message => {
     const channel = message.mentions.channels.first();
     if (!channel) return message.reply("❌ Please mention a channel!");
 
-    await db.set(`xpchannel_${message.guild.id}`, channel.id);
+    db.set(`xpchannel_${message.guild.id}`, channel.id);
     message.reply(`✅ XP level-up messages will now be sent in ${channel}`);
   }
 });
@@ -150,18 +163,10 @@ client.on("interactionCreate", async interaction => {
       .setColor("Blue")
       .setTitle("📘 Help Menu")
       .setDescription(`
-💰 Economy:
- /daily /cash /give /rob /gamble /fish
-
-📊 Level:
-/profile
-
-🛠 Admin:
-/ban /kick /mute /unmute /setwelcomechannel /setxpchannel
-
-📜 Info:
-/rules
-/ping
+💰 Economy: /daily /cash /give /rob /gamble /fish
+📊 Level: /profile
+🛠 Admin: /ban /kick /mute /unmute /setwelcomechannel /setxpchannel
+📜 Info: /rules /ping
       `);
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
@@ -191,33 +196,33 @@ client.on("interactionCreate", async interaction => {
 
   // ECONOMY
   if (commandName === "daily") {
-    let money = await db.get(`money_${interaction.user.id}`) || 0;
+    let money = db.get(`money_${interaction.user.id}`) || 0;
     money += 500;
-    await db.set(`money_${interaction.user.id}`, money);
+    db.set(`money_${interaction.user.id}`, money);
     return interaction.reply("💰 You claimed 500 coins!");
   }
 
   if (commandName === "cash") {
-    let money = await db.get(`money_${interaction.user.id}`) || 0;
+    let money = db.get(`money_${interaction.user.id}`) || 0;
     return interaction.reply(`💰 You have ${money} coins`);
   }
 
   if (commandName === "give") {
     const user = options.getUser("user");
     const amount = options.getInteger("amount");
-    const sender = await db.get(`money_${interaction.user.id}`) || 0;
+    const sender = db.get(`money_${interaction.user.id}`) || 0;
     if (sender < amount) return interaction.reply("❌ Not enough money");
 
-    await db.add(`money_${user.id}`, amount);
-    await db.sub(`money_${interaction.user.id}`, amount);
+    db.add(`money_${user.id}`, amount);
+    db.sub(`money_${interaction.user.id}`, amount);
     return interaction.reply(`💸 Sent ${amount} coins to ${user}`);
   }
 
   if (commandName === "rob") {
     const user = options.getUser("user");
     const amount = Math.floor(Math.random() * 300);
-    await db.sub(`money_${user.id}`, amount);
-    await db.add(`money_${interaction.user.id}`, amount);
+    db.sub(`money_${user.id}`, amount);
+    db.add(`money_${interaction.user.id}`, amount);
     return interaction.reply(`🕵️ You robbed ${amount} coins from ${user}`);
   }
 
@@ -225,24 +230,24 @@ client.on("interactionCreate", async interaction => {
     const amount = options.getInteger("amount");
     const win = Math.random() > 0.5;
     if (win) {
-      await db.add(`money_${interaction.user.id}`, amount);
+      db.add(`money_${interaction.user.id}`, amount);
       return interaction.reply("🎉 You won!");
     } else {
-      await db.sub(`money_${interaction.user.id}`, amount);
+      db.sub(`money_${interaction.user.id}`, amount);
       return interaction.reply("💀 You lost!");
     }
   }
 
   if (commandName === "fish") {
     const amount = Math.floor(Math.random() * 200);
-    await db.add(`money_${interaction.user.id}`, amount);
+    db.add(`money_${interaction.user.id}`, amount);
     return interaction.reply(`🎣 You earned ${amount} coins`);
   }
 
   // PROFILE
   if (commandName === "profile") {
-    const xp = await db.get(`xp_${interaction.user.id}`) || 0;
-    const money = await db.get(`money_${interaction.user.id}`) || 0;
+    const xp = db.get(`xp_${interaction.user.id}`) || 0;
+    const money = db.get(`money_${interaction.user.id}`) || 0;
     const level = Math.floor(0.1 * Math.sqrt(xp));
 
     const embed = new EmbedBuilder()
@@ -258,7 +263,7 @@ client.on("interactionCreate", async interaction => {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
       return interaction.reply("❌ You need Admin perms!");
     const channel = options.getChannel("channel");
-    await db.set(`welcome_${interaction.guild.id}`, channel.id);
+    db.set(`welcome_${interaction.guild.id}`, channel.id);
     return interaction.reply("✅ Welcome channel set!");
   }
 
@@ -267,7 +272,7 @@ client.on("interactionCreate", async interaction => {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
       return interaction.reply("❌ You need Admin perms!");
     const channel = options.getChannel("channel");
-    await db.set(`xpchannel_${interaction.guild.id}`, channel.id);
+    db.set(`xpchannel_${interaction.guild.id}`, channel.id);
     return interaction.reply(`✅ XP level-up messages will now be sent in ${channel}`);
   }
 
