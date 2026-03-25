@@ -2,7 +2,8 @@
 const { 
   Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder
 } = require('discord.js');
-const { QuickDB } = require('quick.db');
+
+const { QuickDB } = require('@louislam/quick.db'); // <-- Updated DB
 const db = new QuickDB();
 
 const client = new Client({
@@ -101,6 +102,7 @@ Make sure to read rules <#rules-channel>
 client.on("messageCreate", async message => {
   if (message.author.bot) return;
 
+  // XP
   let xp = await db.get(`xp_${message.author.id}`) || 0;
   xp += 10;
   let level = Math.floor(0.1 * Math.sqrt(xp));
@@ -110,7 +112,7 @@ client.on("messageCreate", async message => {
     message.channel.send(`🎉 ${message.author} you have reached level ${level}`);
   }
 
-  // ================= PREFIX COMMANDS =================
+  // Prefix Commands
   if (!message.content.startsWith(PREFIX)) return;
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift().toLowerCase();
@@ -120,12 +122,12 @@ client.on("messageCreate", async message => {
   }
 });
 
-// ================= INTERACTIONS (SLASH COMMANDS) =================
+// ================= SLASH COMMAND HANDLER =================
 client.on("interactionCreate", async interaction => {
   if (!interaction.isCommand()) return;
   const { commandName, options } = interaction;
 
-  // ===== HELP =====
+  // HELP
   if (commandName === "help") {
     const embed = new EmbedBuilder()
       .setColor("Blue")
@@ -147,7 +149,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // ===== RULES =====
+  // RULES
   if (commandName === "rules") {
     const embed = new EmbedBuilder()
       .setColor("Orange")
@@ -165,12 +167,12 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // ===== PING =====
+  // PING
   if (commandName === "ping") {
     return interaction.reply(`🏓 Pong! Latency is ${Date.now() - interaction.createdTimestamp}ms`);
   }
 
-  // ===== ECONOMY =====
+  // ECONOMY
   if (commandName === "daily") {
     let money = await db.get(`money_${interaction.user.id}`) || 0;
     money += 500;
@@ -220,7 +222,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply(`🎣 You earned ${amount} coins`);
   }
 
-  // ===== PROFILE =====
+  // PROFILE
   if (commandName === "profile") {
     let xp = await db.get(`xp_${interaction.user.id}`) || 0;
     let money = await db.get(`money_${interaction.user.id}`) || 0;
@@ -234,7 +236,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // ===== ADMIN =====
+  // ADMIN
   if (commandName === "setwelcomechannel") {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
       return interaction.reply("❌ You need Admin perms!");
