@@ -10,11 +10,13 @@ const {
 } = require('discord.js');
 const express = require('express');
 const fs = require('fs');
+require('dotenv').config(); // optional, in case you want local .env
 
 // ---------------------------- EXPRESS SERVER ----------------------------
 const app = express();
 app.get("/", (req, res) => res.send("Bot is alive!"));
-app.listen(3000, () => console.log("Express server running"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Express server running on port ${PORT}`));
 
 // ---------------------------- CLIENT ----------------------------
 const client = new Client({
@@ -30,6 +32,11 @@ const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const PREFIX = "?";
 
+if(!TOKEN || !CLIENT_ID){
+  console.error("❌ TOKEN or CLIENT_ID missing! Set them in Railway Environment Variables.");
+  process.exit(1);
+}
+
 // ---------------------------- DATA FILES ----------------------------
 const LEVELS_FILE = './levels.json';
 const WARNINGS_FILE = './warnings.json';
@@ -38,20 +45,25 @@ const AFK_FILE = './afk.json';
 const AUTOROLE_FILE = './autoroles.json';
 const WELCOME_FILE = './welcome.json';
 
-let levels = fs.existsSync(LEVELS_FILE) ? JSON.parse(fs.readFileSync(LEVELS_FILE)) : {};
-let warnings = fs.existsSync(WARNINGS_FILE) ? JSON.parse(fs.readFileSync(WARNINGS_FILE)) : {};
-let xpChannels = fs.existsSync(XPCHANNELS_FILE) ? JSON.parse(fs.readFileSync(XPCHANNELS_FILE)) : {};
-let afkData = fs.existsSync(AFK_FILE) ? JSON.parse(fs.readFileSync(AFK_FILE)) : {};
-let autoRoles = fs.existsSync(AUTOROLE_FILE) ? JSON.parse(fs.readFileSync(AUTOROLE_FILE)) : {};
-let welcomeChannels = fs.existsSync(WELCOME_FILE) ? JSON.parse(fs.readFileSync(WELCOME_FILE)) : {};
+// Initialize empty files if not exist
+[LEVELS_FILE, WARNINGS_FILE, XPCHANNELS_FILE, AFK_FILE, AUTOROLE_FILE, WELCOME_FILE].forEach(f=>{
+  if(!fs.existsSync(f)) fs.writeFileSync(f,'{}');
+});
+
+let levels = JSON.parse(fs.readFileSync(LEVELS_FILE));
+let warnings = JSON.parse(fs.readFileSync(WARNINGS_FILE));
+let xpChannels = JSON.parse(fs.readFileSync(XPCHANNELS_FILE));
+let afkData = JSON.parse(fs.readFileSync(AFK_FILE));
+let autoRoles = JSON.parse(fs.readFileSync(AUTOROLE_FILE));
+let welcomeChannels = JSON.parse(fs.readFileSync(WELCOME_FILE));
 
 function saveData(){
-  fs.writeFileSync(LEVELS_FILE, JSON.stringify(levels, null, 2));
-  fs.writeFileSync(WARNINGS_FILE, JSON.stringify(warnings, null, 2));
-  fs.writeFileSync(XPCHANNELS_FILE, JSON.stringify(xpChannels, null, 2));
-  fs.writeFileSync(AFK_FILE, JSON.stringify(afkData, null, 2));
-  fs.writeFileSync(AUTOROLE_FILE, JSON.stringify(autoRoles, null, 2));
-  fs.writeFileSync(WELCOME_FILE, JSON.stringify(welcomeChannels, null, 2));
+  fs.writeFileSync(LEVELS_FILE, JSON.stringify(levels,null,2));
+  fs.writeFileSync(WARNINGS_FILE, JSON.stringify(warnings,null,2));
+  fs.writeFileSync(XPCHANNELS_FILE, JSON.stringify(xpChannels,null,2));
+  fs.writeFileSync(AFK_FILE, JSON.stringify(afkData,null,2));
+  fs.writeFileSync(AUTOROLE_FILE, JSON.stringify(autoRoles,null,2));
+  fs.writeFileSync(WELCOME_FILE, JSON.stringify(welcomeChannels,null,2));
 }
 
 // ---------------------------- SLASH COMMANDS ----------------------------
@@ -98,7 +110,7 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
   try {
     console.log("Registering global commands...");
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-    console.log("Commands registered globally!");
+    console.log("✅ Commands registered globally!");
   } catch (err) { console.error(err); }
 })();
 
@@ -135,8 +147,7 @@ client.on("guildMemberAdd", member => {
     .setTitle(`Welcome ${member.user}!`)
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setDescription(
-      `• **Welcome to ${member.guild.name}!**\n` +
-      `Take a moment to settle in.\n\n` +
+      `• **Welcome to ${member.guild.name}!**\nTake a moment to settle in.\n\n` +
       `» Read the rules 🔱 📜 ${rulesChannel ? `<#${rulesChannel.id}>` : '/Rules'}\n` +
       `» Check the announcements 📢 ${announcementsChannel ? `<#${announcementsChannel.id}>` : '/Announcements'}\n` +
       `» Chat here 💬 ${generalChannel ? `<#${generalChannel.id}>` : '/General'}\n\n` +
@@ -155,7 +166,7 @@ client.on("messageCreate", async message => {
   const guild = message.guild;
   const member = message.member;
 
-  // ----------------- AFK -----------------
+  // -------- AFK ----------
   if(afkData[message.author.id]){
     delete afkData[message.author.id];
     saveData();
@@ -169,7 +180,7 @@ client.on("messageCreate", async message => {
     }
   });
 
-  // ----------------- XP / LEVELING -----------------
+  // -------- XP / LEVELING ----------
   if(!levels[guild.id]) levels[guild.id] = {};
   if(!levels[guild.id][message.author.id]) levels[guild.id][message.author.id] = { xp:0, level:1 };
   const data = levels[guild.id][message.author.id];
@@ -185,18 +196,17 @@ client.on("messageCreate", async message => {
   }
   saveData();
 
-  // ----------------- PREFIX COMMANDS -----------------
+  // -------- PREFIX COMMANDS ----------
   if(!message.content.startsWith(PREFIX)) return;
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift().toLowerCase();
   const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  // ---------- HELPER FUNCTION ----------
   async function fetchUser(arg){
     return message.mentions.users.first() || guild.members.cache.get(arg)?.user;
   }
 
-  // ----------------- HELP -----------------
+  // ---------- HELP ----------
   if(cmd === "help"){
     const embed = new EmbedBuilder()
       .setTitle("🤖 Bot Commands")
@@ -253,7 +263,7 @@ client.on("messageCreate", async message => {
   }
 
   // ---------- ADMIN COMMANDS ----------
-  if(!isAdmin) return; // Only admins can use the rest
+  if(!isAdmin) return;
 
   // Kick
   if(cmd==="kick"){
@@ -373,4 +383,6 @@ client.on("messageCreate", async message => {
 });
 
 // ---------------------------- LOGIN ----------------------------
-client.login(TOKEN);
+client.login(TOKEN)
+  .then(()=>console.log("✅ Bot started successfully"))
+  .catch(err=>console.error("❌ Failed to login. Check your TOKEN.", err));
