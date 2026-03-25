@@ -1,17 +1,15 @@
 {
-  "name": "nodejs",
+  "name": "infernox-bot",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@types/node": "^22.13.11",
-    "discord.js": "^14.25.1",
-    "express": "^5.2.1"
+    "discord.js": "^14.15.1",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
