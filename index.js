@@ -2,11 +2,9 @@
 const { 
   Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder
 } = require('discord.js');
-
 const { QuickDB } = require('quick.db');
 const db = new QuickDB();
 
-// CLIENT
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -16,45 +14,55 @@ const client = new Client({
   ]
 });
 
-// ================= COMMANDS =================
+const PREFIX = "?";
+
+// ================= SLASH COMMANDS =================
 const commands = [
   new SlashCommandBuilder().setName("help").setDescription("Show help menu"),
   new SlashCommandBuilder().setName("rules").setDescription("Show server rules"),
-  new SlashCommandBuilder().setName("daily").setDescription("Claim daily coins"),
-  new SlashCommandBuilder().setName("cash").setDescription("Check your balance"),
-  new SlashCommandBuilder().setName("give")
-    .setDescription("Give coins to a user")
-    .addUserOption(o => o.setName("user").setDescription("User to give coins").setRequired(true))
-    .addIntegerOption(o => o.setName("amount").setDescription("Amount to give").setRequired(true)),
-  new SlashCommandBuilder().setName("rob")
-    .setDescription("Rob coins from a user")
+  new SlashCommandBuilder().setName("daily").setDescription("Claim your daily coins"),
+  new SlashCommandBuilder().setName("cash").setDescription("Check your coin balance"),
+  new SlashCommandBuilder()
+    .setName("give")
+    .setDescription("Give coins to another user")
+    .addUserOption(o => o.setName("user").setDescription("The user you want to give coins to").setRequired(true))
+    .addIntegerOption(o => o.setName("amount").setDescription("Amount of coins to give").setRequired(true)),
+  new SlashCommandBuilder()
+    .setName("rob")
+    .setDescription("Rob coins from another user")
     .addUserOption(o => o.setName("user").setDescription("User to rob").setRequired(true)),
-  new SlashCommandBuilder().setName("gamble")
+  new SlashCommandBuilder()
+    .setName("gamble")
     .setDescription("Gamble your coins")
-    .addIntegerOption(o => o.setName("amount").setDescription("Amount to gamble").setRequired(true)),
-  new SlashCommandBuilder().setName("fish").setDescription("Go fishing for coins"),
+    .addIntegerOption(o => o.setName("amount").setDescription("Amount of coins to gamble").setRequired(true)),
+  new SlashCommandBuilder().setName("fish").setDescription("Go fishing to earn coins"),
   new SlashCommandBuilder().setName("profile").setDescription("Check your profile"),
-  new SlashCommandBuilder().setName("setwelcomechannel")
-    .setDescription("Set welcome channel")
-    .addChannelOption(o => o.setName("channel").setDescription("Welcome channel").setRequired(true)),
-  new SlashCommandBuilder().setName("ban")
+  new SlashCommandBuilder()
+    .setName("setwelcomechannel")
+    .setDescription("Set the welcome channel")
+    .addChannelOption(o => o.setName("channel").setDescription("Select the welcome channel").setRequired(true)),
+  new SlashCommandBuilder()
+    .setName("ban")
     .setDescription("Ban a user")
-    .addUserOption(o => o.setName("user").setDescription("User to ban").setRequired(true)),
-  new SlashCommandBuilder().setName("kick")
+    .addUserOption(o => o.setName("user").setDescription("The user to ban").setRequired(true)),
+  new SlashCommandBuilder()
+    .setName("kick")
     .setDescription("Kick a user")
-    .addUserOption(o => o.setName("user").setDescription("User to kick").setRequired(true)),
-  new SlashCommandBuilder().setName("mute")
-    .setDescription("Mute a user (10min)")
-    .addUserOption(o => o.setName("user").setDescription("User to mute").setRequired(true)),
-  new SlashCommandBuilder().setName("unmute")
+    .addUserOption(o => o.setName("user").setDescription("The user to kick").setRequired(true)),
+  new SlashCommandBuilder()
+    .setName("mute")
+    .setDescription("Mute a user for 10 minutes")
+    .addUserOption(o => o.setName("user").setDescription("The user to mute").setRequired(true)),
+  new SlashCommandBuilder()
+    .setName("unmute")
     .setDescription("Unmute a user")
-    .addUserOption(o => o.setName("user").setDescription("User to unmute").setRequired(true))
+    .addUserOption(o => o.setName("user").setDescription("The user to unmute").setRequired(true)),
+  new SlashCommandBuilder().setName("ping").setDescription("Check bot latency")
 ].map(cmd => cmd.toJSON());
 
 // ================= REGISTER SLASH COMMANDS =================
 client.on("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
   try {
@@ -73,7 +81,6 @@ client.on("ready", async () => {
 client.on("guildMemberAdd", async member => {
   const channelId = await db.get(`welcome_${member.guild.id}`);
   if (!channelId) return;
-
   const channel = member.guild.channels.cache.get(channelId);
   if (!channel) return;
 
@@ -87,7 +94,6 @@ Make sure to read rules <#rules-channel>
 
 🎉 Member #${member.guild.memberCount} — enjoy your stay!`
     );
-
   channel.send({ embeds: [embed] });
 });
 
@@ -103,21 +109,30 @@ client.on("messageCreate", async message => {
   if (xp % 100 === 0) {
     message.channel.send(`🎉 ${message.author} you have reached level ${level}`);
   }
+
+  // ================= PREFIX COMMANDS =================
+  if (!message.content.startsWith(PREFIX)) return;
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  const cmd = args.shift().toLowerCase();
+
+  if (cmd === "ping") {
+    message.reply(`🏓 Pong! Latency is ${Date.now() - message.createdTimestamp}ms`);
+  }
 });
 
-// ================= INTERACTIONS =================
+// ================= INTERACTIONS (SLASH COMMANDS) =================
 client.on("interactionCreate", async interaction => {
   if (!interaction.isCommand()) return;
-
   const { commandName, options } = interaction;
 
+  // ===== HELP =====
   if (commandName === "help") {
     const embed = new EmbedBuilder()
       .setColor("Blue")
       .setTitle("📘 Help Menu")
       .setDescription(`
 💰 Economy:
-/daily /cash /give /rob /gamble /fish
+ /daily /cash /give /rob /gamble /fish
 
 📊 Level:
 /profile
@@ -127,10 +142,12 @@ client.on("interactionCreate", async interaction => {
 
 📜 Info:
 /rules
+/ping
       `);
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
+  // ===== RULES =====
   if (commandName === "rules") {
     const embed = new EmbedBuilder()
       .setColor("Orange")
@@ -148,11 +165,16 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // ================= ECONOMY =================
+  // ===== PING =====
+  if (commandName === "ping") {
+    return interaction.reply(`🏓 Pong! Latency is ${Date.now() - interaction.createdTimestamp}ms`);
+  }
+
+  // ===== ECONOMY =====
   if (commandName === "daily") {
     let money = await db.get(`money_${interaction.user.id}`) || 0;
     money += 500;
-    db.set(`money_${interaction.user.id}`, money);
+    await db.set(`money_${interaction.user.id}`, money);
     return interaction.reply("💰 You claimed 500 coins!");
   }
 
@@ -165,45 +187,40 @@ client.on("interactionCreate", async interaction => {
     let user = options.getUser("user");
     let amount = options.getInteger("amount");
     let sender = await db.get(`money_${interaction.user.id}`) || 0;
-
     if (sender < amount) return interaction.reply("❌ Not enough money");
 
-    db.add(`money_${user.id}`, amount);
-    db.sub(`money_${interaction.user.id}`, amount);
-
+    await db.add(`money_${user.id}`, amount);
+    await db.sub(`money_${interaction.user.id}`, amount);
     return interaction.reply(`💸 Sent ${amount} coins to ${user}`);
   }
 
   if (commandName === "rob") {
     let user = options.getUser("user");
     let amount = Math.floor(Math.random() * 300);
-
-    db.sub(`money_${user.id}`, amount);
-    db.add(`money_${interaction.user.id}`, amount);
-
+    await db.sub(`money_${user.id}`, amount);
+    await db.add(`money_${interaction.user.id}`, amount);
     return interaction.reply(`🕵️ You robbed ${amount} coins from ${user}`);
   }
 
   if (commandName === "gamble") {
     let amount = options.getInteger("amount");
     let win = Math.random() > 0.5;
-
     if (win) {
-      db.add(`money_${interaction.user.id}`, amount);
+      await db.add(`money_${interaction.user.id}`, amount);
       return interaction.reply("🎉 You won!");
     } else {
-      db.sub(`money_${interaction.user.id}`, amount);
+      await db.sub(`money_${interaction.user.id}`, amount);
       return interaction.reply("💀 You lost!");
     }
   }
 
   if (commandName === "fish") {
     let amount = Math.floor(Math.random() * 200);
-    db.add(`money_${interaction.user.id}`, amount);
+    await db.add(`money_${interaction.user.id}`, amount);
     return interaction.reply(`🎣 You earned ${amount} coins`);
   }
 
-  // ================= PROFILE =================
+  // ===== PROFILE =====
   if (commandName === "profile") {
     let xp = await db.get(`xp_${interaction.user.id}`) || 0;
     let money = await db.get(`money_${interaction.user.id}`) || 0;
@@ -217,11 +234,10 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // ================= ADMIN =================
+  // ===== ADMIN =====
   if (commandName === "setwelcomechannel") {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
       return interaction.reply("❌ You need Admin perms!");
-
     let channel = options.getChannel("channel");
     await db.set(`welcome_${interaction.guild.id}`, channel.id);
     return interaction.reply("✅ Welcome channel set!");
@@ -230,7 +246,6 @@ client.on("interactionCreate", async interaction => {
   if (commandName === "ban") {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.BanMembers))
       return interaction.reply("❌ You need Ban perms!");
-
     let user = options.getUser("user");
     let member = await interaction.guild.members.fetch(user.id);
     member.ban();
@@ -240,7 +255,6 @@ client.on("interactionCreate", async interaction => {
   if (commandName === "kick") {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.KickMembers))
       return interaction.reply("❌ You need Kick perms!");
-
     let user = options.getUser("user");
     let member = await interaction.guild.members.fetch(user.id);
     member.kick();
