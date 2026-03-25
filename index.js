@@ -142,56 +142,61 @@ client.on("guildMemberAdd", member => {
       `» Chat here 💬 ${generalChannel ? `<#${generalChannel.id}>` : '/General'}\n\n` +
       `**This is a chill place to hang out, talk, and have fun with others!**`
     )
-    .setImage('https://i.ibb.co/YT3x9sK/banner.png') // Your banner
+    .setImage('https://i.ibb.co/YT3x9sK/banner.png')
     .setFooter({ text: `We have ${member.guild.memberCount} members now!` })
     .setTimestamp();
 
   channel.send({ embeds: [embed] });
 });
 
-// ---------------------------- MESSAGE HANDLER (PREFIX COMMANDS & XP) ----------------------------
+// ---------------------------- MESSAGE HANDLER ----------------------------
 client.on("messageCreate", async message => {
   if(message.author.bot) return;
+  const guild = message.guild;
+  const member = message.member;
 
-  // AFK removal
+  // ----------------- AFK -----------------
   if(afkData[message.author.id]){
     delete afkData[message.author.id];
     saveData();
     message.channel.send(`✅ Welcome back ${message.author.tag}, I removed your AFK status.`);
   }
 
-  // AFK mention notification
   message.mentions.users.forEach(async user => {
     if(afkData[user.id]){
       message.channel.send(`⚠️ ${user.tag} is currently AFK: ${afkData[user.id]}`);
-      try { await user.send(`💬 ${message.author.tag} mentioned you in **${message.guild.name}** while you were AFK.\nMessage: "${message.content}"`); } catch {}
+      try { await user.send(`💬 ${message.author.tag} mentioned you in **${guild.name}** while you were AFK.\nMessage: "${message.content}"`); } catch {}
     }
   });
 
-  // XP / leveling
-  if(!levels[message.guild.id]) levels[message.guild.id] = {};
-  if(!levels[message.guild.id][message.author.id]) levels[message.guild.id][message.author.id] = { xp: 0, level: 1 };
-  const userData = levels[message.guild.id][message.author.id];
-  const xpGain = Math.floor(Math.random() * 10) + 5;
-  userData.xp += xpGain;
-  const nextLevelXP = userData.level * 100;
-  if(userData.xp >= nextLevelXP){
-    userData.level++;
-    userData.xp -= nextLevelXP;
-    const lvlChannelId = xpChannels[message.guild.id]?.[0] || message.channel.id;
-    const lvlChannel = message.guild.channels.cache.get(lvlChannelId);
-    if(lvlChannel) lvlChannel.send(`🎉 Congrats ${message.author}! You reached level ${userData.level}!`);
+  // ----------------- XP / LEVELING -----------------
+  if(!levels[guild.id]) levels[guild.id] = {};
+  if(!levels[guild.id][message.author.id]) levels[guild.id][message.author.id] = { xp:0, level:1 };
+  const data = levels[guild.id][message.author.id];
+  const xpGain = Math.floor(Math.random()*10)+5;
+  data.xp += xpGain;
+  const nextLevelXP = data.level*100;
+  if(data.xp >= nextLevelXP){
+    data.level++;
+    data.xp -= nextLevelXP;
+    const lvlChannelId = xpChannels[guild.id]?.[0] || message.channel.id;
+    const lvlChannel = guild.channels.cache.get(lvlChannelId);
+    if(lvlChannel) lvlChannel.send(`🎉 Congrats ${message.author}! You reached level ${data.level}!`);
   }
   saveData();
 
-  // ---------- PREFIX COMMANDS ----------
+  // ----------------- PREFIX COMMANDS -----------------
   if(!message.content.startsWith(PREFIX)) return;
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const cmd = args.shift().toLowerCase();
-  const member = message.member;
-  const isAdminPerm = member.permissions.has(PermissionsBitField.Flags.Administrator);
+  const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  // Utility commands
+  // ---------- HELPER FUNCTION ----------
+  async function fetchUser(arg){
+    return message.mentions.users.first() || guild.members.cache.get(arg)?.user;
+  }
+
+  // ----------------- HELP -----------------
   if(cmd === "help"){
     const embed = new EmbedBuilder()
       .setTitle("🤖 Bot Commands")
@@ -205,11 +210,13 @@ client.on("messageCreate", async message => {
     return message.channel.send({ embeds: [embed] });
   }
 
+  // ---------- PING ----------
   if(cmd === "ping"){
     const msg = await message.channel.send("🏓 Pinging...");
-    msg.edit(`🏓 Pong! Latency is ${msg.createdTimestamp - message.createdTimestamp}ms.`);
+    return msg.edit(`🏓 Pong! Latency is ${msg.createdTimestamp - message.createdTimestamp}ms.`);
   }
 
+  // ---------- AFK ----------
   if(cmd === "afk"){
     const reason = args.join(" ") || "AFK";
     afkData[message.author.id] = reason;
@@ -217,7 +224,152 @@ client.on("messageCreate", async message => {
     return message.channel.send(`✅ You are now AFK: ${reason}`);
   }
 
-  // You can add other prefix commands like ?level, ?leaderboard, and all admin commands similarly...
+  // ---------- LEVEL ----------
+  if(cmd === "level"){
+    const target = await fetchUser(args[0]) || message.author;
+    if(!levels[guild.id][target.id]) levels[guild.id][target.id] = { xp:0, level:1 };
+    const d = levels[guild.id][target.id];
+    const embed = new EmbedBuilder()
+      .setTitle(`${target.tag}'s Profile`)
+      .setColor("Gold")
+      .setThumbnail(target.displayAvatarURL({ dynamic:true }))
+      .setDescription(`**Level:** ${d.level}\n**XP:** ${d.xp}/${d.level*100}`);
+    return message.channel.send({ embeds: [embed] });
+  }
+
+  // ---------- LEADERBOARD ----------
+  if(cmd === "leaderboard"){
+    const guildLevels = levels[guild.id];
+    if(!guildLevels || !Object.keys(guildLevels).length) return message.channel.send("No level data yet.");
+    const sorted = Object.entries(guildLevels).sort(([,a],[,b])=>b.level-a.level||b.xp-b.xp).slice(0,10);
+    let desc="";
+    for(let i=0;i<sorted.length;i++){
+      const u = await client.users.fetch(sorted[i][0]).catch(()=>({tag:"Unknown#0000"}));
+      const d = sorted[i][1];
+      desc += `**${i+1}. ${u.tag}** - Level ${d.level} | XP ${d.xp}\n`;
+    }
+    const embed = new EmbedBuilder().setTitle(`🏆 Top 10 Users in ${guild.name}`).setColor("Purple").setDescription(desc).setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+  }
+
+  // ---------- ADMIN COMMANDS ----------
+  if(!isAdmin) return; // Only admins can use the rest
+
+  // Kick
+  if(cmd==="kick"){
+    const target = await fetchUser(args[0]);
+    if(!target) return message.channel.send("User not found.");
+    const mem = guild.members.cache.get(target.id);
+    mem?.kick().then(()=>message.channel.send(`${target.tag} has been kicked.`)).catch(()=>message.channel.send("❌ Failed to kick."));
+  }
+
+  // Ban
+  if(cmd==="ban"){
+    const target = await fetchUser(args[0]);
+    if(!target) return message.channel.send("User not found.");
+    const mem = guild.members.cache.get(target.id);
+    mem?.ban().then(()=>message.channel.send(`${target.tag} has been banned.`)).catch(()=>message.channel.send("❌ Failed to ban."));
+  }
+
+  // Mute
+  if(cmd==="mute"){
+    const target = await fetchUser(args[0]);
+    const mins = parseInt(args[1]);
+    if(!target || isNaN(mins)) return message.channel.send("Usage: ?mute @user <minutes>");
+    const mem = guild.members.cache.get(target.id);
+    let muteRole = guild.roles.cache.find(r=>r.name==="Muted");
+    if(!muteRole) return message.channel.send("❌ 'Muted' role not found. Create it first.");
+    mem.roles.add(muteRole).then(()=>{
+      const endTime = new Date(Date.now()+mins*60*1000);
+      message.channel.send(`${target.tag} muted for ${mins} min(s). Ends <t:${Math.floor(endTime.getTime()/1000)}:R>`);
+      setTimeout(()=>{mem.roles.remove(muteRole).catch(()=>{});}, mins*60*1000);
+    }).catch(()=>message.channel.send("❌ Failed to mute."));
+  }
+
+  // Unmute
+  if(cmd==="unmute"){
+    const target = await fetchUser(args[0]);
+    const mem = guild.members.cache.get(target?.id);
+    if(!mem) return message.channel.send("User not found.");
+    let muteRole = guild.roles.cache.find(r=>r.name==="Muted");
+    if(!muteRole) return message.channel.send("❌ 'Muted' role not found.");
+    if(!mem.roles.cache.has(muteRole.id)) return message.channel.send("User is not muted.");
+    mem.roles.remove(muteRole).then(()=>message.channel.send(`✅ ${target.tag} has been unmuted.`));
+  }
+
+  // Warn
+  if(cmd==="warn"){
+    const target = await fetchUser(args[0]);
+    const reason = args.slice(1).join(" ");
+    if(!target || !reason) return message.channel.send("Usage: ?warn @user <reason>");
+    if(!warnings[guild.id]) warnings[guild.id]={};
+    if(!warnings[guild.id][target.id]) warnings[guild.id][target.id]=[];
+    warnings[guild.id][target.id].push(reason);
+    saveData();
+    message.channel.send(`${target.tag} has been warned for: ${reason}`);
+  }
+
+  // Warnings
+  if(cmd==="warnings"){
+    const target = await fetchUser(args[0]);
+    if(!target) return message.channel.send("User not found.");
+    const userWarnings = warnings[guild.id]?.[target.id]||[];
+    const embed = new EmbedBuilder().setTitle(`${target.tag}'s Warnings`).setColor("Red")
+      .setDescription(userWarnings.length?userWarnings.map((w,i)=>`${i+1}. ${w}`).join("\n"):"No warnings.");
+    message.channel.send({ embeds: [embed] });
+  }
+
+  // Announce
+  if(cmd==="announce"){
+    const msgContent = args.join(" ");
+    if(!msgContent) return message.channel.send("Usage: ?announce <message>");
+    const embed = new EmbedBuilder()
+      .setTitle("📢 Announcement")
+      .setDescription(msgContent)
+      .setColor("Orange")
+      .setFooter({ text: `Announcement by ${message.author.tag}`, iconURL: message.author.displayAvatarURL({ dynamic:true }) })
+      .setTimestamp();
+    message.channel.send({ embeds: [embed] });
+  }
+
+  // AddXP / RemoveXP
+  if(cmd==="addxp" || cmd==="removexp"){
+    const target = await fetchUser(args[0]);
+    const amt = parseInt(args[1]);
+    if(!target || isNaN(amt)) return message.channel.send("Usage: ?addxp @user <amount>");
+    if(!levels[guild.id][target.id]) levels[guild.id][target.id]={xp:0,level:1};
+    if(cmd==="addxp") levels[guild.id][target.id].xp += amt;
+    else levels[guild.id][target.id].xp = Math.max(0, levels[guild.id][target.id].xp - amt);
+    saveData();
+    message.channel.send(`${cmd==="addxp"? "Added":"Removed"} ${amt} XP ${cmd==="addxp"? "to":"from"} ${target.tag}`);
+  }
+
+  // SetAutoRole
+  if(cmd==="setautorole"){
+    const role = guild.roles.cache.get(args[0].replace(/\D/g,""));
+    if(!role) return message.channel.send("Role not found.");
+    autoRoles[guild.id] = role.id;
+    saveData();
+    message.channel.send(`✅ Auto-role set to ${role.name}`);
+  }
+
+  // SetWelcome
+  if(cmd==="setwelcome"){
+    const ch = guild.channels.cache.get(args[0].replace(/\D/g,""));
+    if(!ch) return message.channel.send("Channel not found.");
+    welcomeChannels[guild.id]=ch.id;
+    saveData();
+    message.channel.send(`✅ Welcome channel set to ${ch.name}`);
+  }
+
+  // SetXPChannel
+  if(cmd==="setxpchannel"){
+    const ch = guild.channels.cache.get(args[0].replace(/\D/g,""));
+    if(!ch) return message.channel.send("Channel not found.");
+    xpChannels[guild.id]=[ch.id];
+    saveData();
+    message.channel.send(`✅ XP channel set to ${ch.name}`);
+  }
 });
 
 // ---------------------------- LOGIN ----------------------------
