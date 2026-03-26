@@ -147,15 +147,20 @@ client.on("guildMemberAdd", async member => {
   if(!channel) return;
 
   const memberCount = member.guild.memberCount;
-  const joinedAt = `<t:${Math.floor(member.joinedTimestamp / 1000)}:d>, <t:${Math.floor(member.joinedTimestamp / 1000)}:t>`;
 
   const welcomeEmbed = new EmbedBuilder()
     .setColor("Gold")
-    .setTitle("🎉 Welcome!")
+    .setTitle(`🎉 WELCOME ${member.user.username}! 🎉`)
     .setDescription(
-      `Welcome ${member} to **${member.guild.name}**!\n\n` +
-      `Make sure to read the rules in <#YOUR_RULES_CHANNEL_ID>\n\n` +
-      `Enjoy your stay! 🎊`
+      `✨ ───────────────── ✨\n\n` +
+      `🔥 You joined **${member.guild.name}**\n` +
+      `💎 Enjoy your stay & have fun!\n\n` +
+      `🚀 Start chatting now\n` +
+      `📜 Read the rules\n` +
+      `🎯 Get your roles\n\n` +
+      `👥 Member #${memberCount}\n\n` +
+      `✨ ───────────────── ✨\n\n` +
+      `💥 We're glad to have you here! 💥`
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
     .setFooter({ text: `Member #${memberCount} • ${new Date(member.joinedTimestamp).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}, ${new Date(member.joinedTimestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` })
