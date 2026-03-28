@@ -435,7 +435,18 @@ client.on("interactionCreate", async interaction => {
     try {
       await targetMember.send(`👢 You have been **kicked** from **${guild.name}**.\n**Reason:** ${reason}`).catch(() => {});
       await targetMember.kick(reason);
-      return interaction.reply(`✅ ${targetUser} has been kicked.`);
+      const embed = new EmbedBuilder()
+        .setColor(0xE67E22)
+        .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+        .setTitle("👢 Member Kicked")
+        .addFields(
+          { name: "User",      value: `${targetUser}`, inline: true },
+          { name: "Moderator", value: `${interaction.user}`, inline: true },
+          { name: "Reason",    value: reason, inline: false }
+        )
+        .setFooter({ text: `ID: ${targetUser.id}` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to kick the user.", ephemeral: true });
@@ -454,7 +465,18 @@ client.on("interactionCreate", async interaction => {
     }
     try {
       await guild.members.ban(targetUser.id, { reason, deleteMessageSeconds: 0 });
-      return interaction.reply(`✅ ${targetUser} has been banned.`);
+      const embed = new EmbedBuilder()
+        .setColor(0xE74C3C)
+        .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+        .setTitle("🔨 Member Banned")
+        .addFields(
+          { name: "User",      value: `${targetUser}`, inline: true },
+          { name: "Moderator", value: `${interaction.user}`, inline: true },
+          { name: "Reason",    value: reason, inline: false }
+        )
+        .setFooter({ text: `ID: ${targetUser.id}` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to ban the user.", ephemeral: true });
@@ -476,7 +498,19 @@ client.on("interactionCreate", async interaction => {
     if (targetMember) {
       await targetMember.send(`⚠️ You have been **warned** in **${guild.name}**.\n**Reason:** ${reason}\n**Total warnings:** ${totalWarnings}`).catch(() => {});
     }
-    return interaction.reply(`✅ ${targetUser} has been warned.`);
+    const embed = new EmbedBuilder()
+      .setColor(0xF1C40F)
+      .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+      .setTitle("⚠️ Member Warned")
+      .addFields(
+        { name: "User",           value: `${targetUser}`, inline: true },
+        { name: "Moderator",      value: `${interaction.user}`, inline: true },
+        { name: "Total Warnings", value: `${totalWarnings}`, inline: true },
+        { name: "Reason",         value: reason, inline: false }
+      )
+      .setFooter({ text: `ID: ${targetUser.id}` })
+      .setTimestamp();
+    return interaction.reply({ embeds: [embed] });
   }
 
   if (commandName === "warnings") {
@@ -484,13 +518,27 @@ client.on("interactionCreate", async interaction => {
     const targetUser = interaction.options.getUser("user");
     const userWarns  = warnings[guild.id]?.[targetUser.id];
     if (!userWarns || userWarns.length === 0) {
-      return interaction.reply(`✅ ${targetUser} has no warnings.`);
+      const embed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+        .setTitle("📋 Warnings")
+        .setDescription("This user has no warnings.")
+        .setFooter({ text: `ID: ${targetUser.id}` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [embed] });
     }
     const warnList = userWarns.map((w, i) => {
       const date = new Date(w.date).toLocaleDateString('en-US');
-      return `**#${i + 1}** — ${w.reason} *(by ${w.moderator || 'Unknown'} on ${date})*`;
-    }).join("\n");
-    return interaction.reply(`📋 **Warnings for ${targetUser}** (${userWarns.length} total)\n${warnList}`);
+      return `**#${i + 1}** — ${w.reason}\n> by ${w.moderator || 'Unknown'} • ${date}`;
+    }).join("\n\n");
+    const embed = new EmbedBuilder()
+      .setColor(0xF1C40F)
+      .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+      .setTitle("📋 Warnings")
+      .setDescription(warnList)
+      .setFooter({ text: `Total: ${userWarns.length} warning(s) • ID: ${targetUser.id}` })
+      .setTimestamp();
+    return interaction.reply({ embeds: [embed] });
   }
 
   if (commandName === "clearwarnings") {
@@ -498,7 +546,14 @@ client.on("interactionCreate", async interaction => {
     const targetUser = interaction.options.getUser("user");
     if (warnings[guild.id]) warnings[guild.id][targetUser.id] = [];
     saveData();
-    return interaction.reply(`✅ Warnings cleared for ${targetUser}.`);
+    const embed = new EmbedBuilder()
+      .setColor(0x2ECC71)
+      .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+      .setTitle("🧹 Warnings Cleared")
+      .setDescription(`All warnings for ${targetUser} have been cleared.`)
+      .setFooter({ text: `ID: ${targetUser.id}` })
+      .setTimestamp();
+    return interaction.reply({ embeds: [embed] });
   }
 
   if (commandName === "mute") {
@@ -513,7 +568,19 @@ client.on("interactionCreate", async interaction => {
     try {
       await targetMember.timeout(minutes * 60 * 1000, reason);
       await targetMember.send(`🔇 You have been **muted** in **${guild.name}** for **${minutes} minute(s)**.\n**Reason:** ${reason}`).catch(() => {});
-      return interaction.reply(`✅ ${targetUser} has been muted for **${minutes}** minute(s).`);
+      const embed = new EmbedBuilder()
+        .setColor(0xE67E22)
+        .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+        .setTitle("🔇 Member Muted")
+        .addFields(
+          { name: "User",      value: `${targetUser}`, inline: true },
+          { name: "Moderator", value: `${interaction.user}`, inline: true },
+          { name: "Duration",  value: `${minutes} minute(s)`, inline: true },
+          { name: "Reason",    value: reason, inline: false }
+        )
+        .setFooter({ text: `ID: ${targetUser.id}` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to mute the user.", ephemeral: true });
@@ -529,7 +596,17 @@ client.on("interactionCreate", async interaction => {
     try {
       await targetMember.timeout(null);
       await targetMember.send(`🔊 Your mute in **${guild.name}** has been removed.`).catch(() => {});
-      return interaction.reply(`✅ ${targetUser} has been unmuted.`);
+      const embed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setAuthor({ name: `${targetUser.tag}`, iconURL: targetUser.displayAvatarURL({ dynamic: true }) })
+        .setTitle("🔊 Member Unmuted")
+        .addFields(
+          { name: "User",      value: `${targetUser}`, inline: true },
+          { name: "Moderator", value: `${interaction.user}`, inline: true }
+        )
+        .setFooter({ text: `ID: ${targetUser.id}` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to unmute the user.", ephemeral: true });
