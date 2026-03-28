@@ -332,13 +332,9 @@ client.on("messageCreate", async message => {
     const leveledUp = addXP(guildId, userId, xpGain);
     if (leveledUp) {
       const lvl = levels[guildId][userId].level;
-      const embed = new EmbedBuilder().setColor("Gold").setTitle("🎁 Level Up!")
-        .setDescription(`🎉 ${message.author} just reached **Level ${lvl}**!\n📈 Keep chatting to level up more!`)
-        .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-        .setTimestamp();
       const notifyChannelId = xpChannels[guildId];
       const notifyChannel = notifyChannelId ? message.guild.channels.cache.get(notifyChannelId) : message.channel;
-      if (notifyChannel) notifyChannel.send({ embeds: [embed] });
+      if (notifyChannel) notifyChannel.send(`🎉🎊 Congrats ${message.author}! You reached level **${lvl}**!`);
     }
   }
 
@@ -358,6 +354,58 @@ client.on("messageCreate", async message => {
       )
       .setFooter({ text: "Breaking rules may result in warnings, mutes, kicks, or bans." });
     return message.channel.send({ embeds: [embed] });
+  }
+
+  // ---- ?lock ----
+  if (message.content.toLowerCase().startsWith("?lock")) {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels) &&
+        !message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ You need the **Manage Channels** permission to lock channels.");
+    }
+    const reason = message.content.slice(5).trim() || "No reason provided";
+    try {
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+        SendMessages: false
+      });
+      const embed = new EmbedBuilder()
+        .setColor("Red")
+        .setTitle("🔒 Channel Locked")
+        .setDescription(`This channel has been locked. Members can no longer send messages here.`)
+        .addFields(
+          { name: "Locked by", value: message.author.tag, inline: true },
+          { name: "Reason",    value: reason, inline: true }
+        )
+        .setTimestamp();
+      return message.channel.send({ embeds: [embed] });
+    } catch (err) {
+      console.error(err);
+      return message.reply("❌ Failed to lock the channel. Make sure I have the **Manage Channels** permission.");
+    }
+  }
+
+  // ---- ?unlock ----
+  if (message.content.toLowerCase().startsWith("?unlock")) {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels) &&
+        !message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ You need the **Manage Channels** permission to unlock channels.");
+    }
+    try {
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+        SendMessages: null
+      });
+      const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("🔓 Channel Unlocked")
+        .setDescription(`This channel has been unlocked. Members can send messages again.`)
+        .addFields(
+          { name: "Unlocked by", value: message.author.tag, inline: true }
+        )
+        .setTimestamp();
+      return message.channel.send({ embeds: [embed] });
+    } catch (err) {
+      console.error(err);
+      return message.reply("❌ Failed to unlock the channel. Make sure I have the **Manage Channels** permission.");
+    }
   }
 });
 
@@ -387,13 +435,7 @@ client.on("interactionCreate", async interaction => {
     try {
       await targetMember.send(`👢 You have been **kicked** from **${guild.name}**.\n**Reason:** ${reason}`).catch(() => {});
       await targetMember.kick(reason);
-      const embed = new EmbedBuilder().setColor("Orange").setTitle("👢 Member Kicked")
-        .addFields(
-          { name: "User",      value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-          { name: "Moderator", value: interaction.user.tag, inline: true },
-          { name: "Reason",    value: reason }
-        ).setTimestamp();
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply(`✅ ${targetUser} has been kicked.`);
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to kick the user.", ephemeral: true });
@@ -412,13 +454,7 @@ client.on("interactionCreate", async interaction => {
     }
     try {
       await guild.members.ban(targetUser.id, { reason, deleteMessageSeconds: 0 });
-      const embed = new EmbedBuilder().setColor("Red").setTitle("🔨 Member Banned")
-        .addFields(
-          { name: "User",      value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-          { name: "Moderator", value: interaction.user.tag, inline: true },
-          { name: "Reason",    value: reason }
-        ).setTimestamp();
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply(`✅ ${targetUser} has been banned.`);
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to ban the user.", ephemeral: true });
@@ -440,14 +476,7 @@ client.on("interactionCreate", async interaction => {
     if (targetMember) {
       await targetMember.send(`⚠️ You have been **warned** in **${guild.name}**.\n**Reason:** ${reason}\n**Total warnings:** ${totalWarnings}`).catch(() => {});
     }
-    const embed = new EmbedBuilder().setColor("Yellow").setTitle("⚠️ Member Warned")
-      .addFields(
-        { name: "User",           value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-        { name: "Moderator",      value: interaction.user.tag, inline: true },
-        { name: "Total Warnings", value: `${totalWarnings}`, inline: true },
-        { name: "Reason",         value: reason }
-      ).setTimestamp();
-    return interaction.reply({ embeds: [embed] });
+    return interaction.reply(`✅ ${targetUser} has been warned.`);
   }
 
   if (commandName === "warnings") {
@@ -455,17 +484,13 @@ client.on("interactionCreate", async interaction => {
     const targetUser = interaction.options.getUser("user");
     const userWarns  = warnings[guild.id]?.[targetUser.id];
     if (!userWarns || userWarns.length === 0) {
-      return interaction.reply({ content: `✅ **${targetUser.tag}** has no warnings.`, ephemeral: true });
+      return interaction.reply(`✅ ${targetUser} has no warnings.`);
     }
     const warnList = userWarns.map((w, i) => {
       const date = new Date(w.date).toLocaleDateString('en-US');
-      return `**#${i + 1}** — ${w.reason}\n*by ${w.moderator || 'Unknown'} on ${date}*`;
-    }).join("\n\n");
-    const embed = new EmbedBuilder().setColor("Yellow").setTitle(`⚠️ Warnings for ${targetUser.tag}`)
-      .setDescription(warnList)
-      .setFooter({ text: `Total: ${userWarns.length} warning(s)` })
-      .setTimestamp();
-    return interaction.reply({ embeds: [embed] });
+      return `**#${i + 1}** — ${w.reason} *(by ${w.moderator || 'Unknown'} on ${date})*`;
+    }).join("\n");
+    return interaction.reply(`📋 **Warnings for ${targetUser}** (${userWarns.length} total)\n${warnList}`);
   }
 
   if (commandName === "clearwarnings") {
@@ -473,7 +498,7 @@ client.on("interactionCreate", async interaction => {
     const targetUser = interaction.options.getUser("user");
     if (warnings[guild.id]) warnings[guild.id][targetUser.id] = [];
     saveData();
-    return interaction.reply(`✅ Cleared all warnings for **${targetUser.tag}**.`);
+    return interaction.reply(`✅ Warnings cleared for ${targetUser}.`);
   }
 
   if (commandName === "mute") {
@@ -482,20 +507,13 @@ client.on("interactionCreate", async interaction => {
     const minutes      = interaction.options.getInteger("minutes");
     const reason       = interaction.options.getString("reason") || "No reason provided";
     const targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
-    if (!targetMember)              return interaction.reply({ content: "❌ That user is not in this server.", ephemeral: true });
-    if (!targetMember.moderatable)  return interaction.reply({ content: "❌ I can't mute that user — they may have a higher role than me.", ephemeral: true });
+    if (!targetMember)             return interaction.reply({ content: "❌ That user is not in this server.", ephemeral: true });
+    if (!targetMember.moderatable) return interaction.reply({ content: "❌ I can't mute that user — they may have a higher role than me.", ephemeral: true });
     if (targetMember.id === interaction.user.id) return interaction.reply({ content: "❌ You cannot mute yourself.", ephemeral: true });
     try {
       await targetMember.timeout(minutes * 60 * 1000, reason);
       await targetMember.send(`🔇 You have been **muted** in **${guild.name}** for **${minutes} minute(s)**.\n**Reason:** ${reason}`).catch(() => {});
-      const embed = new EmbedBuilder().setColor("Orange").setTitle("🔇 Member Muted")
-        .addFields(
-          { name: "User",      value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-          { name: "Moderator", value: interaction.user.tag, inline: true },
-          { name: "Duration",  value: `${minutes} minute(s)`, inline: true },
-          { name: "Reason",    value: reason }
-        ).setTimestamp();
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply(`✅ ${targetUser} has been muted for **${minutes}** minute(s).`);
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to mute the user.", ephemeral: true });
@@ -511,12 +529,7 @@ client.on("interactionCreate", async interaction => {
     try {
       await targetMember.timeout(null);
       await targetMember.send(`🔊 Your mute in **${guild.name}** has been removed.`).catch(() => {});
-      const embed = new EmbedBuilder().setColor("Green").setTitle("🔊 Member Unmuted")
-        .addFields(
-          { name: "User",      value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-          { name: "Moderator", value: interaction.user.tag, inline: true }
-        ).setTimestamp();
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply(`✅ ${targetUser} has been unmuted.`);
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: "❌ Failed to unmute the user.", ephemeral: true });
@@ -531,7 +544,7 @@ client.on("interactionCreate", async interaction => {
       .setFooter({ text: `Announced by ${interaction.user.tag}` })
       .setTimestamp();
     await interaction.channel.send({ embeds: [embed] });
-    return interaction.reply({ content: "✅ Announcement sent!", ephemeral: true });
+    return interaction.reply({ content: "✅ Announcement sent.", ephemeral: true });
   }
 
   if (commandName === "clear") {
@@ -615,7 +628,7 @@ client.on("interactionCreate", async interaction => {
         { name: "💰 Economy",     value: "`/cash`, `/daily`, `/give`, `/fish`, `/rob`, `/gamble`, `/shop`, `/buy`" },
         { name: "🛡️ Auto-Mod",   value: "`/automod enable/disable/addword/removeword/listwords/setlog/setspam/setlinks/status`" },
         { name: "⚙️ Setup",       value: "`/setwelcome`, `/setautorole`, `/setxpchannel`" },
-        { name: "🔧 Utility",     value: "`/afk`, `/ping`, `?rules`" }
+        { name: "🔧 Utility",     value: "`/afk`, `/ping`, `?rules`, `?lock [reason]`, `?unlock`" }
       );
     return interaction.reply({ embeds: [embed] });
   }
@@ -668,7 +681,7 @@ client.on("interactionCreate", async interaction => {
   }
 
   if (commandName === "addxp") {
-    if (!isAdmin) return interaction.reply({ content: "❌ Admins only.", ephemeral: true });
+    if (!isAdmin) return interaction.reply({ content: "❌ You need the **Administrator** permission.", ephemeral: true });
     const target = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
     if (amount <= 0) return interaction.reply({ content: "❌ Amount must be greater than 0.", ephemeral: true });
@@ -676,7 +689,7 @@ client.on("interactionCreate", async interaction => {
     if (!levels[guild.id][target.id]) levels[guild.id][target.id] = { xp: 0, level: 1 };
     const leveled = addXP(guild.id, target.id, amount);
     const data = levels[guild.id][target.id];
-    return interaction.reply(`✅ Added **${amount} XP** to ${target.tag}. Now **Level ${data.level}** (${data.xp}/${data.level * 100} XP).${leveled ? " 🎉 Leveled up!" : ""}`);
+    return interaction.reply(`✅ Added **${amount} XP** to ${target}.${leveled ? ` They leveled up to **Level ${data.level}**! 🎉` : ` They are now at **${data.xp}/${data.level * 100} XP**.`}`);
   }
 
   if (commandName === "removexp") {
@@ -691,7 +704,7 @@ client.on("interactionCreate", async interaction => {
     while (userData.xp < 0 && userData.level > 1) { userData.level--; userData.xp += userData.level * 100; }
     if (userData.xp < 0) userData.xp = 0;
     saveData();
-    return interaction.reply(`✅ Removed **${amount} XP** from ${target.tag}. Now **Level ${userData.level}** (${userData.xp}/${userData.level * 100} XP).`);
+    return interaction.reply(`✅ Removed **${amount} XP** from ${target}. They are now at **Level ${userData.level}** (${userData.xp}/${userData.level * 100} XP).`);
   }
 
   if (commandName === "leaderboard") {
